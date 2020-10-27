@@ -2,10 +2,10 @@
 title: "Проект №1 \"Насколько стара Мидия\""
 output: html_document
 ---
-
+Список используемых библиотек (для дальнейшей работы с отчётом):
+"car", "dplyr", "ggplot2","markdown","tidyr","psych", "PerformanceAnalytics".
+Функция для установки библиотек используемых в отчёте (при необходимости). Не требует аргументов.
 ```{r setup, echo=FALSE, collapse=TRUE, warning=FALSE, message=FALSE}
-# Список используемых библиотек (для дальнейшей работы с отчётом
-# Функция для установки библиотек используемых в отчёте (при необходимости). Не требует аргументов.
 setup_libs <- function() {
   libs <- c("car", "dplyr", "ggplot2","markdown","tidyr","psych", "PerformanceAnalytics")
 for (i in 1:length(libs)){
