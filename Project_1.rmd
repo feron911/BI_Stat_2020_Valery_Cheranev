@@ -1,0 +1,211 @@
+---
+title: "Проект №1 \"Насколько стара Мидия\""
+output: html_document
+---
+Список используемых библиотек (для дальнейшей работы с отчётом):
+"car", "dplyr", "ggplot2","markdown","tidyr","psych", "PerformanceAnalytics".
+Функция для установки библиотек используемых в отчёте (при необходимости). Не требует аргументов.
+```{r setup, echo=FALSE, collapse=TRUE, warning=FALSE, message=FALSE}
+setup_libs <- function() {
+  libs <- c("car", "dplyr", "ggplot2","markdown","tidyr","psych", "PerformanceAnalytics")
+for (i in 1:length(libs)){
+  if (!require(libs[i], character.only = T)) install.packages(libs[i])
+  library(libs[i], character.only = T)
+}
+}
+setup_libs()
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+```
+
+### Формирование единого датасета с данными
+  Ниже представлена функция для формирования  единого датасета из папки с данными (формата csv). На вход принимает 1 аргумент("way") - полный путь до папки с файлами. На выходе функция возвращает готовый единый датафрейм, в котором все столбцы сведены к типу данных "character". Это небоходимо для того, чтобы корректно подгрузить все "csv", несмотря на наличие ошибок при формировании файлов с данными.
+```{r, echo=FALSE, collapse=TRUE}
+get_data <- function(way){
+  X <-  list.files(path = way, pattern="*.csv")
+  for (i in 1:length(X)) {
+    df <- read.csv(paste0(way,"/",X[i]), encoding = "UTF-8")
+    df <- apply(df, MARGIN = 2, FUN = as.character)
+    df <- as_tibble(df)
+    if (i == 1) {
+      all_df <- df 
+    } else {  
+      all_df <- bind_rows(all_df,df)
+    }
+  }
+  all_df<- rename(all_df, Sex = Sex..1...male..2...female..3...uvenil.)
+  return(as_tibble(all_df))
+  }
+```
+  Вставьте полный путь до папки(аргумент "way") с файлами  формата ".csv" (Не забудьте использовать кавычки)
+```{r, collapse=TRUE}
+my_data <- get_data("C:/Users/Feron911/Desktop/BI/Stats_and_R/Project_1/Data")
+```
+## EDA
+  После предварительной сборки данных в единую таблицу мы можем её оценить визуально. В трех первых переменных обнаруживаются значения которые несоотвествуют формату переменной.Например, в переменной "Rings" записаны дискретные целые положительные числа (число колец у моллюска), однако одно из наблюдений записано в формате строки "nine". При представлении переменной как фактора и выведении его уровней. Можно увидеть ошибочные значения. 
+```{r, collapse=TRUE, echo=FALSE}
+View(my_data)
+levels(as.factor(my_data$Rings))
+levels(as.factor(my_data$Sex))
+max(levels(as.factor(my_data$Length)))
+```
+  Для замены данных значений использовалась функция which. Повторная проверка значений.
+```{r, collapse=TRUE, echo=FALSE}
+View(my_data)
+my_data$Rings[which(my_data$Rings %in% "nine")] <- "9" #Замена значения "nine"
+my_data$Sex[which(my_data$Sex %in% "three")] <- "3"    #Замена значения "three"
+my_data$Sex[which(my_data$Sex %in% "one")] <- "1"      #Замена значения "one"
+my_data$Sex[which(my_data$Sex %in% "male")] <- "1"     #Замена значения "male
+levels(as.factor(my_data$Rings))
+levels(as.factor(my_data$Sex))
+```
+  Значения переменных кроме пола("Sex") и количества колец("Rings") переводятся в формат "numeric"
+```{r, warning=FALSE, message=FALSE, collapse=TRUE, echo=FALSE}
+my_data[,-c(1,2)] <- apply(my_data[,-c(1,2)], MARGIN = 2, FUN = as.numeric)
+```
+  Значения первых двух переменных конвертируются в фактор и дальнейший анализ ведётся при наличии разбиения на группы по этим двум переменным. Для этого одно наблюдение, для которого в переменной пол присутствует NA выносится в отдельную переменную "Unknown_sex". Остальной датафрейм сохранятся в переменную "fix_data". 
+```{r,collapse=TRUE,echo=FALSE}
+fix_data <- my_data[-343,]
+Unknown_sex <- my_data[343,]
+```  
+  Дальнейшая работа проводится с ним. При сборе данных в единый дата фрейм было отмечено, что в переменной "Sex" в цифра 1 соответствует мужской особи моллюска, 2 - женской, 3 - ювенильной. Производим замену цифровых значений переменной на текстовые и переводим в переменные "Rings" и "Sex" в факторы. Ниже представлен уровень факторных переменных. Переменную "Rings" необходимо предварительно преобразовать в integer, чтобы сохранить верные значения при формировании уровней фактора.
+```{r, collapse=TRUE, echo=FALSE}
+fix_data[fix_data$Sex == "3", "Sex"] <- "Juvenile"
+fix_data[fix_data$Sex == "2", "Sex"] <- "Female"
+fix_data[fix_data$Sex == "1", "Sex"] <- "Male"
+
+fix_data$Sex <- as.factor(fix_data$Sex)
+fix_data$Rings <- apply(fix_data[,1], MARGIN = 2, as.integer)
+fix_data$Rings <- as.factor(fix_data$Rings)
+
+levels(fix_data$Rings)
+levels(fix_data$Sex)
+```
+  Проверяем количественные переменные на наличие выбосов. График boxplot показываeт, что сильные отклонения в наблюдениях, превышающие двойной интерквартильный размах (99 процентный доверительный интервал) обнаруживаются только в переменной "Height". Также в этой переменной есть наблюдения равные нулю, что с биологической точки зрения не имеет смысла. 
+```{r, collapse=TRUE, echo=FALSE, warning=F}
+ggplot(stack(fix_data[,-c(1,2)]), aes(x = factor(ind, levels = names(fix_data[,-c(1,2)])), y = values)) +
+  geom_boxplot(na.rm = T)+
+  xlab("Variables")+
+  ggtitle("Range of variables (IQR = 1.5)")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(angle = 0))+
+  scale_x_discrete(guide = guide_axis(n.dodge = 2))+
+  scale_y_continuous(limits = c(0,3), 
+                     breaks = c(0,seq(0,3,0.25)))
+```
+  
+  Проверяем распределения переменных при помощи построения гистограмм. 
+```{r, collapse=TRUE, echo=FALSE, warning=FALSE, message=FALSE}
+multi.hist(fix_data[,-c(1,2)])
+```
+  
+  Переменные распределены не нормально, поэтому наиболее правильной заменой для NA, а также выбросов(значений за пределами 99% доверительного интервала) и нулевых значений в составе переменной "Height" будут моды подгрупп, отфильтрованных в соответствии с полом и количеством колец.
+```{r, collapse=TRUE, echo=FALSE, warning=F}
+fix_data <- fix_data %>%
+  group_by(Sex, Rings)%>%
+  mutate_at(vars(-group_cols()), funs(ifelse(is.na(.),getmode(.), .)))
+
+fix_data <- fix_data %>% 
+  group_by(Sex, Rings)%>%
+  mutate_at(vars(Height),funs(ifelse(. == 0 | . > mean(fix_data$Height) + 3.29*sd(fix_data$Height), getmode(.),.)))
+
+ggplot(stack(fix_data[,-c(1,2)]), aes(x = factor(ind, levels = names(fix_data[,-c(1,2)])), y = values)) +
+  geom_boxplot(na.rm = T)+
+  xlab("Variables")+
+  ggtitle("Range of variables (IQR = 1.5)")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(angle = 0))+
+  scale_x_discrete(guide = guide_axis(n.dodge = 2))+
+  scale_y_continuous(limits = c(0,3), 
+                     breaks = c(0,seq(0,3,0.25)))
+```
+  
+  Для оценки взаимосвязи переменных строим таблицу c коффициентами корреляций (для численных переменных), ScatterPlot график для визуальной оценки взаимодействия.
+```{r, collapse=TRUE, echo=FALSE}
+cor(fix_data[,-c(1,2)])
+pairs(fix_data)
+```
+  
+  Численные переменные представляют собой линейные ("Length", "Diameter","Height") или весовые характеристики одного организма ("Whole_weight", "Shucked_weight", "Viscera_weight", "Shell_weight"). В связи с этим мы можем наблюдать сильную корреляцию между всеми численными переменными. По этой причине дальнейший анализ необходимо сосредоточить на взаимосвязи факторных переменных между собой и с линейными показателями.
+  
+### Среднее значение и стандартное отклонение переменной "Length" для моллюсков разного пола.
+```{r,collapse=TRUE, echo=FALSE}
+fix_data %>%
+  group_by(Sex) %>%
+  summarise(mean = mean(Length),
+            sd = sd(Length), .groups = "drop")
+```
+### У какого процента моллюсков значение переменной "Height" не превышает 0.165?
+```{r,collapse=TRUE, echo=FALSE}
+round(nrow(fix_data[fix_data$Height <= 0.165,])/nrow(fix_data)*100, digits = 2)
+```
+### Чему равняется значение переменной "Length", которое больше, чем у 92% от всех наблюдений?
+```{r,collapse=TRUE, echo=FALSE}
+min(fix_data[fix_data$Length > quantile(fix_data$Length, probs = 0.92),]$Length)
+```
+### Создай новую переменную "Lenght_z_scores" и сохрани в нее значения переменной "Length" после её стандартизации.
+```{r,collapse=TRUE, echo=FALSE}
+fix_data <- mutate(fix_data, Length_z_score = (Length - mean(Length))/sd(Length))
+head (fix_data)
+```
+## Сравнение между собой диаметров моллюсков с числом колец 5 и 15.
+  
+  Для сравнения моллюсков с числом колец 5 и 15 вынесем их в отдельный датасет ("rings_5_15"). Согласно Шапиро-Уилка тесту мы не можем отвергнуть гипотезу о нормальном распределении (p-value = 0.28884(5 - колец), p-value = 0.1060944(15-колец)). QQplot показывает незначительные отклонения от нормального распределения. Также на графике с диграммой размаха и violin plot визуально заметно, что средние значения выборок не лежат в пределах доверительных интервалов друг друга. T-тест с поправкой Уэлча (p-value < 2.2e-16) и тест Уилкокса (p-value < 2.2e-16) подтверждают статистическую достоверность разлий в диаметре у моллюсков с 5 и 15 кольцами. 
+```{r, warning= F, , collapse=TRUE, echo=FALSE}
+rings_5_15 <- filter(fix_data, Rings == 5 | Rings == 15)
+
+swt_5_len <- shapiro.test(rings_5_15[rings_5_15$Rings == 5,]$Diameter)
+swt_15_len <- shapiro.test(rings_5_15[rings_5_15$Rings == 15,]$Diameter)
+
+wil_test_5_15 <- wilcox.test(rings_5_15[rings_5_15$Rings == 5,]$Diameter, rings_5_15[rings_5_15$Rings == 15,]$Diameter, data = rings_5_15, conf.int = T)
+
+ttest_5_15 <- t.test(rings_5_15[rings_5_15$Rings == 15,]$Diameter, rings_5_15[rings_5_15$Rings == 5,]$Diameter[1:103], var.equal = TRUE)
+
+qqPlot(rings_5_15[rings_5_15$Rings == 5,]$Diameter, main = "QQplot for length of mussels with 5 rings", ylab = "Quantile for diameter of mussels")
+qqPlot(rings_5_15[rings_5_15$Rings == 15,]$Diameter, main = "QQplot for length of mussels with 15 rings", ylab = "Quantile for diameter of mussels")
+
+ggplot(rings_5_15, aes(x = Rings, y = Diameter))+
+  geom_violin(width = 0.5)+
+  geom_boxplot(width = 0.1)+
+  ggtitle(label = "Comparison diameter of mussel with 5 rings and with 15 Rings")+
+  theme(title = element_text(), 
+        plot.title = element_text(hjust = 0.5))
+```
+
+## Поиск взаимосвязей между переменными "Diameter" и "Whole_weight".
+  
+  Диаметр и вес взаимосвязанные параметры с сильным уровнем корреляции (0,92, p-value < 2.2e-16). Связано это с тем, что вес мидии зависит от её линейных размеров (через кубическую функцию). Поэтому при возведении диаметры в куб возможно построить линейную модель по которой можно было бы предсказывать одну характеристику по другой.  
+```{r, collapse=TRUE, echo=FALSE, comment= F, warning=F, tidy= T}
+ggplot(fix_data, aes(x = Diameter, y = Whole_weight))+
+  geom_point()+
+  stat_smooth(method = "gam", formula = y ~ s(x, bs = "cs"))+
+  scale_x_continuous(limits = c(0.05,0.65), breaks = seq(0,0.65, 0.05))+
+  scale_y_continuous(breaks = seq(0,3,0.5))+
+  ggtitle("Dependence between diameter and whole weight of the mussels")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+Diam_3 <- mutate(fix_data, diam_3 = Diameter**3)
+
+ggplot(Diam_3, aes(x = Whole_weight, y = diam_3))+
+  geom_point()+
+  stat_smooth(se = T, method = "lm", formula = y ~ x)+
+  scale_x_continuous(limits = c(0,3), breaks = seq(0,3, 0.5))+
+  scale_y_continuous(breaks = seq(0,0.3,0.05))+
+  ggtitle("Dependence between (diameter)^3 and whole weight of the mussels")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  ylab("Diameter^3")
+
+diam_whweight <- lm(Whole_weight ~ diam_3, Diam_3)
+
+ctest_di_ww<- cor.test(Diam_3$Whole_weight, Diam_3$diam_3)
+
+```
+
+
+
+
+
+
+
