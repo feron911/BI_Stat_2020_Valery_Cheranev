@@ -1,4 +1,4 @@
-install.packages("pandoc")
+install.packages("ggpubr")
 library(MASS)
 library(ggplot2)
 library(car)
@@ -7,6 +7,7 @@ library(psych)
 library(Hmisc)
 library(dplyr)
 library(lmtest)
+library(ggpubr)
 
 help("Boston")
 ??Boston
@@ -19,6 +20,8 @@ Bos$chas <- factor(Bos$chas, levels = c(1,0), labels = c("River_close", "River_f
 str(Bos)
 most_exp_house <- lm(medv ~ .+., Bos)
 summary(most_exp_house)
+
+multi.hist(Bos) 
 
 unique(Bos$tax)
 unique(Bos$rad)
@@ -145,7 +148,8 @@ plot(most_exp_house)
 
 bptest(most_exp_house)
 
-
+multi.hist(Bos[,c(1:3, 5, 7, 8, 11:14)])
+multi.hist(Bos_log)
 
 most_exp_house_log <- lm(log(medv) ~ log(crim) + log(indus) +log(nox)+log(rm)+log(age)+log(dis)+log(rad)+log(tax)+log(ptratio)+log(black)+log(lstat), Bos)
 most_exp_house_log <- lm(log(medv) ~ log(crim)+log(zn), Bos)
@@ -163,9 +167,20 @@ ggplot(Bos[Bos$chas == "River_close",], aes(x = tax, y = rad))+
 ggplot(Bos[Bos$chas == "River_far",], aes(x = tax, y = rad))+
   geom_point()
 
-Bos[Bos$chas == "River_close",]$tax
-Bos[Bos$chas == "River_close",]$chas
-Bos[Bos$chas == "River_close",]$rad
+ggplot(Bos, aes(x = tax, y = rad, col = chas))+
+  geom_point()
+
+p1 <- ggplot(Boston, aes(x = tax, y = medv))+
+  geom_point()
+
+p2 <- ggplot(Boston, aes(x = rad, y = medv))+
+  geom_point()
+
+ggarrange(p1, p2, ncol = 2)
+
+ggplot(Bos, aes(y = medv))+
+  geom_point(aes(x = tax))+
+  geom_point(aes(x = rad))
 
 pairs(Bos[,-4])
 
@@ -181,3 +196,4 @@ ggplot(most_exp_house, aes(x = most_exp_house$model$lstat, y = most_exp_house$fi
 corr.test(Scaled_Bos[, 1:12])$r
 cor.plot(Scaled_Bos[,1:12])
 
+rm(get_data)
