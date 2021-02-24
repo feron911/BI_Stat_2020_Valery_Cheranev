@@ -104,12 +104,8 @@ t.test(mddf$BDNF_N)
 
 ks.test(mddf$BDNF_N, "pnorm", mean = mean(mddf$BDNF_N), sd = sd(mddf$BDNF_N), na.rm = T)
 
-ks.
 
 str(mddf)
-
-
-
 
 BDNF_aov <- aov(BDNF_N ~ class, data = mddf)
 
@@ -145,14 +141,24 @@ summary(erbb4_lm)
 corr.test(mddf_copy_prot)
 
 
+apply(mddf, MARGIN = 2, function (.) sum(is.na(.)))
+apply(mddf, MARGIN = 1, function (.) sum(is.na(.)))
 
+na.count <- function(vec, a = 0){
+  ifelse(sum(is.na(vec) == 0, a <- a + 1, a <- a))
+}
 
+sum(apply(mddf, MARGIN = 1, function (.) ifelse(sum(is.na(.)) == 0, 1, 0)))
 
+print(a)
 
+mean(mddf$H3AcK18_N, na.rm = T)
 
+min(mddf[2:78], na.rm = T)
 
+grep("311", mddf$MouseID)
 
-
+mddf_gr <- group_by(mddf, class)
 
 
 
