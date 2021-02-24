@@ -1,7 +1,9 @@
 library(ggplot2)
 library(dplyr)
 library(rmarkdown)
-
+library(psych)
+library(vegan)
+library(factoextra)
 
 get_mouse_data <- function(){
   if (file.exists("Data_Cortex_Nuclear.xls")){
@@ -78,7 +80,6 @@ ggplot(mddf, aes(x = class, y = BDNF_N))+
   theme(plot.title = element_text(hjust = 0.5),
         axis.text.y = element_text(angle = 0))
 
-
 ggplot(mddf, aes(x = BDNF_N))+
   geom_histogram()+
   facet_wrap(~ class)
@@ -88,22 +89,18 @@ ggplot(mddf, aes(sample = BDNF_N), na.rm = T)+
   geom_qq_line()+
   facet_wrap(~class)
 
-
 mddf %>%
   group_by(class)%>%
   summarise(shapiro_stat = shapiro.test(BDNF_N)$statistic,
             shapiro_p_value = shapiro.test(BDNF_N)$p.value)
 
-  
 aaa <- shapiro.test(mddf$BDNF_N)
 
 aaa$statistic
 
 t.test(mddf$BDNF_N)
 
-
 ks.test(mddf$BDNF_N, "pnorm", mean = mean(mddf$BDNF_N), sd = sd(mddf$BDNF_N), na.rm = T)
-
 
 str(mddf)
 
@@ -125,9 +122,8 @@ mddf_copy <- mddf
 
 pairwise.wilcox.test(mddf_copy$BDNF_N, mddf_copy$class, p.adjust.method = "bonf")
 
-
-
 mddf_copy <- na.replace(mddf_copy)
+
 rm(hahaha)
 
 sum(is.na(mddf_copy))
@@ -138,31 +134,94 @@ erbb4_lm <- lm(ERBB4_N ~ .+., mddf_copy_prot)
 
 summary(erbb4_lm)
 
-corr.test(mddf_copy_prot)
-
+corr.test(mddf_prot[1:77])
 
 apply(mddf, MARGIN = 2, function (.) sum(is.na(.)))
 apply(mddf, MARGIN = 1, function (.) sum(is.na(.)))
 
-na.count <- function(vec, a = 0){
-  ifelse(sum(is.na(vec) == 0, a <- a + 1, a <- a))
-}
-
 sum(apply(mddf, MARGIN = 1, function (.) ifelse(sum(is.na(.)) == 0, 1, 0)))
-
-print(a)
 
 mean(mddf$H3AcK18_N, na.rm = T)
 
-min(mddf[2:78], na.rm = T)
-
 grep("311", mddf$MouseID)
+
+
+
 
 mddf_gr <- group_by(mddf, class)
 
 
+mddf_prot <- mddf[c(2:78,82)]
+
+mddf_prot$MouseID_wo_count <- sub('_[0-9]*','',mddf$MouseID)
+
+mddf_prot$MouseID_wo_count <- factor(mddf_prot$MouseID_wo_count)
 
 
+mddf_prot <- mddf_prot %>%
+  group_by(class, MouseID_wo_count)%>%
+  mutate_at(vars(-group_cols()), funs(ifelse(is.na(.), mean(., na.rm = T), .)))
+
+mddf_prot <- ungroup(mddf_prot)
+
+mddf_prot <- mddf_prot %>%
+  group_by(class)%>%
+  mutate_at(vars(-group_cols()), funs(ifelse(is.na(.), mean(., na.rm = T), .)))
+
+erbb4_lm <- lm(ERBB4_N ~ class*(.+.), mddf_prot)
+
+summary(erbb4_lm)
+
+sum(is.na(mddf_prot))
+
+apply(mddf_prot, MARGIN = 2, function (.) sum(is.na(.)))
+
+ggplot(erbb4_lm, aes(x = erbb4_lm$fitted.values, y = erbb4_lm$residuals))+
+  geom_point()
+
+qqPlot(erbb4_lm$residuals)
+
+qqnorm(erbb4_lm$residuals)
+
+ggpairs(mddf_prot)
+
+pca_mddf <- princomp(mddf_prot[1:77])
+biplot(pca_mddf)
+
+
+
+rda_mddf <- rda(mddf_prot[1:77])
+
+biplot(rda_mddf, display = c("sites",
+                             "species"),
+       type = c("text",
+                "points"))
+
+ordihull(rda_mddf,
+         group = mddf_prot$class)
+
+plot(rda_mddf)
+
+summary(rda_mddf)
+saa$cont
+
+
+
+
+
+
+
+
+
+
+
+fviz_eig(pca_mddf, addlabels = T)
+
+screeplot(rda_mddf, type = "barplot")
+screeplot(rda_mddf, type = "lines", legend = T)
+
+rda_mddf$CA$poseig
+  
 
 
 

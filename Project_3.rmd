@@ -109,14 +109,59 @@ pairwise.wilcox.test(mddf$BDNF_N, mddf$class, p.adjust.method = "bonf")
   В зависимости от конкретной сравниваемой пары, ключевым фактором объясняющим различия может служить как трисомия, так и добавление лекарственного средства, так и факт наличия стимула к обучению.
   
 ## Линейная модель для ERBB4_N на основании данных о других белках
-  Исключаем из датафрейма все столбцы с метаданными, кроме классов, т.к. они дублируют всю необходимую информацию.
+  Исключаем из датафрейма все столбцы с метаданными, кроме классов, т.к. они дублируют всю необходимую информацию. Преобразуем стоблец Mouse ID, так чтобы можно было группировать и заменяем NA на среднее по классам и мышам в столбцах, в которых NA повторяется менее 15 раз. Затем повторяем процедуру для NA с использованием среднего по классу мышей.
 ```{r}
 mddf_prot <- mddf[,c(2:78,82)]
+mddf_prot$MouseID_wo_count <- sub('_[0-9]*','',mddf$MouseID)
+mddf_prot$MouseID_wo_count <- factor(mddf_prot$MouseID_wo_count)
+
+mddf_prot <- mddf_prot %>%
+  group_by(class, MouseID_wo_count)%>%
+  mutate_at(vars(-group_cols()), funs(ifelse(is.na(.), mean(., na.rm = T), .)))
+
+mddf_prot <- ungroup(mddf_prot)
+
+mddf_prot <- mddf_prot %>%
+  group_by(class)%>%
+  mutate_at(vars(-group_cols()), funs(ifelse(is.na(.), mean(., na.rm = T), .)))
 ```  
-  Строим линейную модель на основании всех данных
-  
-  
-  
+  Строим линейную модель на основании всех данных о белках c учетом взаимодействия классов мышей.
+```{r}
+erbb4_lm <- lm(ERBB4_N ~ class*(.+.), mddf_prot)
+summary(erbb4_lm)
+```
+  Проводим оценку линейной модели
+  Гомоскедастичность остатков соблюдается и остатки модели распределены нормально
+```{r}
+ggplot(erbb4_lm, aes(x = erbb4_lm$fitted.values, y = erbb4_lm$residuals))+
+  geom_point()
+qqnorm(erbb4_lm$residuals)
+
+```
+  Однако наблдается очень высокая автокорреляция отдельных предикторов
+```{r}
+corr.test(mddf_prot[1:77])
+```
+## PCA
+```{r}
+rda_mddf <- rda(mddf_prot[1:77])
+
+biplot(rda_mddf, display = c("sites",
+                             "species"),
+       type = c("text",
+                "points"))
+
+ordihull(rda_mddf,
+         group = mddf_prot$class)
+screeplot(rda_mddf)
+```
+
+```{r}
+pca_mddf <- princomp(mddf_prot[1:77])
+fviz_eig(pca_mddf, addlabels = T)
+```
+  Первые 4 компоненты вносят максимальный вклад.
+
   
   
     
