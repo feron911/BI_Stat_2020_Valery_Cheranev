@@ -1,14 +1,14 @@
 ---
-title: "The_most_expensive_house"
+title: "Mouse_protein_expression"
 output: html_document
 ---
 ### Блок для установки 
     Этот раздел включает функцию для установки (или включения) библиотек для работы отчёта.
 ```{r setup, message=FALSE, warning=FALSE, collapse=TRUE}
-# Список используемых библиотек (для дальнейшей работы с отчётом: "car", "MASS", "ggplot2","markdown","GGally", "psych", "Hmisc", "dplyr", "lmtest", "ggpubr".
+# Список используемых библиотек (для дальнейшей работы с отчётом: "car", "MASS", "ggplot2","markdown","GGally", "psych", "Hmisc", "dplyr", "lmtest", "ggpubr", "vegan", "factoextra".
 # Функция для установки библиотек используемых в отчёте (при необходимости). Не требует аргументов.
 setup_libs <- function() {
-  libs <- c("car", "MASS", "ggplot2","markdown","GGally", "psych", "Hmisc", "dplyr", "lmtest", "ggpubr")
+  libs <- c("car", "MASS", "ggplot2","markdown","GGally", "psych", "Hmisc", "dplyr", "lmtest", "ggpubr", "vegan", "factoextra")
 for (i in 1:length(libs)){
   if (!require(libs[i], character.only = T)) install.packages(libs[i])
   library(libs[i], character.only = T)
