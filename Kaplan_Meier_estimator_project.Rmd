@@ -1,0 +1,120 @@
+---
+title: "Kaplan–Meier_estimator_project"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+### Блок для установки 
+    Этот раздел включает функцию для установки (и/или включения) библиотек для работы отчёта.
+```{r setup, message=FALSE, warning=FALSE, collapse=TRUE}
+# Список используемых библиотек (для дальнейшей работы с отчётом: "ggplot2","markdown","Hmisc", "dplyr", "survival", "ggfortify", "survminer".
+# Функция для установки библиотек используемых в отчёте (при необходимости). Не требует аргументов.
+setup_libs <- function() {
+  libs <- c("ggplot2","markdown","Hmisc", "dplyr", "survival", "ggfortify", "survminer")
+for (i in 1:length(libs)){
+  if (!require(libs[i], character.only = T)) install.packages(libs[i])
+  library(libs[i], character.only = T)
+}
+}
+setup_libs()
+```
+
+### Данные и их структура
+Всего в данных 26 наблюдений и 6 переменных.
+
+funtime - время события или цензурирования данных
+fustat - наличие цензурирования
+age - возраст (в годах)
+resid.ds - остаточная болезнь (1-нет, 2-есть)
+rx - группа по принимаемым лекарствам (1 и 2)
+exog.ps - шкала для оценки общего состояния пациента (1 - не могут выполнять физически тяжёлую работу, 2 - более 50% времени бодрствования может ходить вести активную деятельность, способен к "самообслуживанию")
+
+```{r, include=FALSE}
+data("ovarian")
+head(ovarian)
+str(ovarian)
+sum(is.na(ovarian))
+```
+
+В данных нет пропущенных значений. Однако некотореы факторные(resid.ds, rx, fustat, eocg.ps) переменные представлены в numeric формате. 
+
+
+### EDA
+Переводим переменные из numeric в factor.
+```{r}
+ova <- ovarian
+ova$rx <- factor(ova$rx)
+ova$resid.ds <- factor(ova$resid.ds, levels = c(1,2), labels = c("healthy", "resdes"))
+ova$ecog.ps <- factor(ova$ecog.ps)
+```
+
+Оцениваем распределение переменных
+```{r}
+hist(ova)
+```
+По переменной rx группы сбалансированны. По факторным переменным есть небольшой разброс. По количественным переменным разброс шире.
+
+### Кривые Каплана-Майера
+
+```{r pressure, echo=FALSE}
+km <- with(ova, Surv(futime, fustat))
+head(km, 80)
+```
+
+```{r pressure, echo=FALSE}
+km_fit <- survfit(Surv(futime, fustat) ~ 1, data = ova)
+summary(km_fit, times = c(1, 30, 60, 90*(1:10)))
+```
+
+```{r}
+autoplot(km_fit)
+```
+
+
+
+### Отличия групп по выживаемости
+оценка влияния плана лечения на выживаемость.
+```{r}
+km_trt_fit <- survfit(Surv(futime, fustat) ~ rx, data = ova)
+autoplot(km_trt_fit)
+```
+
+```{r pressure, echo=FALSE}
+survdiff(Surv(futime, fustat) ~ rx, data = ova)
+```
+
+На кривых Каплана-Майера заметна разница в выживаемости пациентов в зависимости от плана лечения. Однако с течением времени разница становится менее выраженной.
+
+### Факторы, которые влияют на риск и отношение рисков
+```{r}
+cox <- coxph(Surv(futime, fustat) ~ rx + ecog.ps + resid.ds + age, data = ova)
+summary(cox)
+```
+На основании анализа факторов риска age оказался единственным значимым фактором с точки зрения увеличения вероятности погибнуть в следующий временной промежуток.
+
+```{r}
+cox_fit <- survfit(cox)
+autoplot(cox_fit)
+```
+
+```{r, echo=False}
+aa_fit <- aareg(Surv(futime, fustat) ~ rx + age + resid.ds + ecog.ps, data = ova)
+autoplot(aa_fit)
+```
+Переменная Age и переменная resid.ds со временем растут. Возможно наличие корреляции между этими переменными.
+
+
+
+#### Оценка отношений рисков
+
+```{r pressure, echo=FALSE}
+fit.coxph <- coxph(Surv(futime, fustat) ~ rx + age + resid.ds + ecog.ps, data = ova)
+ggforest(fit.coxph, data = ova)
+```
+
+На основании оценки отношения рисков age оказался единственным значимым фактором с точки зрения увеличения вероятности погибнуть в следующий временной промежуток.
+
+
+
