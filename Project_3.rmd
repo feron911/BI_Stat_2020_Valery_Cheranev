@@ -1,0 +1,167 @@
+---
+title: "Mouse_protein_expression"
+output: html_document
+---
+### Блок для установки 
+    Этот раздел включает функцию для установки (или включения) библиотек для работы отчёта.
+```{r setup, message=FALSE, warning=FALSE, collapse=TRUE}
+# Список используемых библиотек (для дальнейшей работы с отчётом: "car", "MASS", "ggplot2","markdown","GGally", "psych", "Hmisc", "dplyr", "lmtest", "ggpubr", "vegan", "factoextra".
+# Функция для установки библиотек используемых в отчёте (при необходимости). Не требует аргументов.
+setup_libs <- function() {
+  libs <- c("car", "MASS", "ggplot2","markdown","GGally", "psych", "Hmisc", "dplyr", "lmtest", "ggpubr", "vegan", "factoextra")
+for (i in 1:length(libs)){
+  if (!require(libs[i], character.only = T)) install.packages(libs[i])
+  library(libs[i], character.only = T)
+}
+}
+setup_libs()
+```
+
+## Описание датасета
+    
+```{r}
+get_mouse_data <- function(){
+  if (file.exists("Data_Cortex_Nuclear.xls")){
+    return(readxl::read_xls("Data_Cortex_Nuclear.xls"))
+  }
+  download.file("https://archive.ics.uci.edu/ml/machine-learning-databases/00342/Data_Cortex_Nuclear.xls", 
+                       destfile = paste0(getwd(),"/Data_Cortex_Nuclear.xls"), method = "wininet", mode = "wb")
+  return(readxl::read_xls("Data_Cortex_Nuclear.xls"))
+  
+}
+
+mddf <- get_mouse_data() #mouse_down_data_frame(mddf)
+
+str(mddf)
+
+```
+  Количество мышей в эксперименте определяется по количеству уникальных идентификаторов.
+```{r}
+length(unique(sub('_[0-9]*','',mddf$MouseID)))
+```
+  Всего мышей 72 штуки однако на каждую из них приходится по 15 измерений уровня экспресии 77 различных белков.
+  Выделяемые группы мышей по мета данным
+```{r}
+unique(mddf$class)
+```
+  Выделяется 8 подгрупп. Первая буква определяет генотип (с(control) - контрольные мыши, t (trisomy) - трисомия, модель синдрома Дауна на мышах). Последующие две определяют наличие у группы "стимулирования к обучению" (CS - стимул был, SC - стимула не было). Последняя буква определяет наличие лекарственного средства для восстановления способности к обучению (m(memantine) - воздействие средства, s(saline) - плацебо).
+  Проверяем сбалансированность групп (с учётом наличия 15 повторов на каждую мышь).
+```{r} 
+table(mddf$class)/15
+```
+  В группах не одинаковое количество мышей, значит группы не сбалансированны между собой.
+  В данных содержатся NA в количестве 1396 штук. 
+```{r}  
+  sum(is.na(mddf))
+``` 
+  Сумму полных наблюдений (без NA) составляет
+```{r}
+sum(apply(mddf, MARGIN = 1, function (.) ifelse(sum(is.na(.)) == 0, 1, 0)))
+```
+  Учитывая, что речь об уровне экспресии белков, среди данных нет нулей, а в оригинальной статье упоминается, что при низком нормализованном значении экспресии (<0.1), данные отбрасывались, то можно предположить, что NA имеют биологическое значение (белок мыши не экспрессировался или экспрессировался очень слабо). Особенно в случае, если белок не был найден во всех 15 повторах.
+```{r}
+  prot <- mddf[,2:78] # извлекаем из данных только числовые значения экспрессии
+  prot_wo_na <- prot[!is.na(prot)] # убираем из данных все NA значения
+  sum(prot_wo_na == 0) # поиск нулевых значений (ни одного не встретилось)
+``` 
+    
+    
+    
+    
+    Одно значение в датасете отрицательное, т.к. экспрессия не может быть отрицательной, то заменяем это число на его положительное значение.
+```{r}
+  min(mddf[2:78], na.rm = T)
+  which.min(unlist(prot))
+  mddf$RRP1_N[which.min(mddf$RRP1_N)] <- abs(mddf$RRP1_N[which.min(mddf$RRP1_N)])
+```
+    
+## Отличия в экспресии гена BDNF_N в зависимости от класса    
+    
+```{r}
+ggplot(mddf, aes(x = class, y = BDNF_N))+
+  geom_violin()+
+  geom_boxplot(width = 0.2)+
+  ggtitle("Уровень экспрессии белка BDNF_N в зависимости от класса мыши")+
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(angle = 0))
+```
+    На графике не видно значительных различий в экспрессии гена между классами.
+    
+    Для дополнительной оценки необходимо провести тесты для оценки нормальности распределения уровня экспресии
+```{r}
+ggplot(mddf, aes(sample = BDNF_N), na.rm = T)+
+  geom_qq()+
+  geom_qq_line()+
+  facet_wrap(~class)
+
+
+mddf %>%
+  group_by(class)%>%
+  summarise(shapiro_stat = shapiro.test(BDNF_N)$statistic,
+            shapiro_p_value = shapiro.test(BDNF_N)$p.value)
+```
+  График QQplot и результаты Шапиро-уилка теста показывают, что отклонения распределения уровня экспрессии от нормального значимо отличаются в основном из-за аутлайеров(группы "c-SC-m", "t-CS-m", "t-CS-s", "t-SC-m").
+  
+```{r}
+pairwise.wilcox.test(mddf$BDNF_N, mddf$class, p.adjust.method = "bonf")
+```
+  Применение попарного тест Манна-Уитни показывает, что в зависимости от класса наблюдаются значимые отличия в экспрессии данного гена.
+  В зависимости от конкретной сравниваемой пары, ключевым фактором объясняющим различия может служить как трисомия, так и добавление лекарственного средства, так и факт наличия стимула к обучению.
+  
+## Линейная модель для ERBB4_N на основании данных о других белках
+  Исключаем из датафрейма все столбцы с метаданными, кроме классов, т.к. они дублируют всю необходимую информацию. Преобразуем стоблец Mouse ID, так чтобы можно было группировать и заменяем NA на среднее по классам и мышам в столбцах, в которых NA повторяется менее 15 раз. Затем повторяем процедуру для NA с использованием среднего по классу мышей.
+```{r}
+mddf_prot <- mddf[,c(2:78,82)]
+mddf_prot$MouseID_wo_count <- sub('_[0-9]*','',mddf$MouseID)
+mddf_prot$MouseID_wo_count <- factor(mddf_prot$MouseID_wo_count)
+
+mddf_prot <- mddf_prot %>%
+  group_by(class, MouseID_wo_count)%>%
+  mutate_at(vars(-group_cols()), funs(ifelse(is.na(.), mean(., na.rm = T), .)))
+
+mddf_prot <- ungroup(mddf_prot)
+
+mddf_prot <- mddf_prot %>%
+  group_by(class)%>%
+  mutate_at(vars(-group_cols()), funs(ifelse(is.na(.), mean(., na.rm = T), .)))
+```  
+  Строим линейную модель на основании всех данных о белках c учетом взаимодействия классов мышей.
+```{r}
+erbb4_lm <- lm(ERBB4_N ~ class*(.+.), mddf_prot)
+summary(erbb4_lm)
+```
+  Проводим оценку линейной модели
+  Гомоскедастичность остатков соблюдается и остатки модели распределены нормально
+```{r}
+ggplot(erbb4_lm, aes(x = erbb4_lm$fitted.values, y = erbb4_lm$residuals))+
+  geom_point()
+qqnorm(erbb4_lm$residuals)
+
+```
+  Однако наблдается очень высокая автокорреляция отдельных предикторов
+```{r}
+corr.test(mddf_prot[1:77])
+```
+## PCA
+```{r}
+rda_mddf <- rda(mddf_prot[1:77])
+
+biplot(rda_mddf, display = c("sites",
+                             "species"),
+       type = c("text",
+                "points"))
+
+ordihull(rda_mddf,
+         group = mddf_prot$class)
+screeplot(rda_mddf)
+```
+
+```{r}
+pca_mddf <- princomp(mddf_prot[1:77])
+fviz_eig(pca_mddf, addlabels = T)
+```
+  Первые 4 компоненты вносят максимальный вклад.
+
+  
+  
+    
